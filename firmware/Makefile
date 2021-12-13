@@ -27,14 +27,6 @@ else
 acenic-objs := acenic/tg1.bin acenic/tg2.bin
 endif
 
-ifdef CONFIG_LGE_TOUCH_FW_PATH
-fwpath := $(subst ",,$(CONFIG_LGE_TOUCH_FW_PATH))
-lge_touch_image_files := $(wildcard $(srctree)/firmware/$(fwpath)/*.img)
-lge_touch_image_files += $(wildcard $(srctree)/firmware/$(fwpath)/*.txt)
-endif
-lge_touch_firmware := $(subst $(srctree)/firmware/,,$(lge_touch_image_files))
-fw-shipped-$(CONFIG_LGE_TOUCH_CORE_BASE) += $(lge_touch_firmware)
-
 fw-shipped-$(CONFIG_ACENIC) += $(acenic-objs)
 fw-shipped-$(CONFIG_ADAPTEC_STARFIRE) += adaptec/starfire_rx.bin \
 					 adaptec/starfire_tx.bin
@@ -144,11 +136,50 @@ fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM) += keyspan_pda/xircom_pgs.fw
 fw-shipped-$(CONFIG_USB_VICAM) += vicam/firmware.fw
 fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
-fw-shipped-$(CONFIG_LGE_USB_ANX7418) += anx7418/ocm_hamming_12.bin
+
+# LG firmware
+ifdef CONFIG_MACH_MSM8996_LUCYE
+fw-shipped-$(CONFIG_LGE_TOUCH_CORE_BASE) += \
+	touch/lucye/L1L57P1_8_23_SW49407_Lucy_VB.img \
+	touch/lucye/L1L57P2_1_03.img \
+	touch/lucye/L1L57P2_1_05.img \
+	touch/lucye/lucye_limit.txt \
+	touch/lucye/lucye_limit_mfts.txt
+endif
+ifdef CONFIG_MACH_MSM8996_H1
+# Old, or for Japanese model.
+# PLG468-V1.20-PR1901334-DS5.2.200.1.1002_50055194504C47343638.img,
+# h1_hdk_limit_mfts_curved.txt, h1_hdk_limit_mfts_flat.txt, h1_hdk_limit_mfts_folder.txt
+fw-shipped-$(CONFIG_LGE_TOUCH_CORE_BASE) += \
+	touch/h1/H1_LG4945_0.01.img \
+	touch/h1/L0L53P1_1_14.img \
+	touch/h1/L0L53P1_1_22.img \
+	touch/h1/h1_limit.txt \
+	touch/h1/h1_limit_mfts.txt
+endif
+ifdef CONFIG_MACH_MSM8996_ELSA
+# Old, or for Japanese model.
+# L1L52P1_1_05.img, L1L52P1_1_13.img, L1L57P1_1_13.img
+fw-shipped-$(CONFIG_LGE_TOUCH_CORE_BASE) += \
+	touch/elsa/L0L57P1_1_35.img \
+	touch/elsa/L0L57P1_2_00.img \
+	touch/elsa/L1L57P1_1_14.img \
+	touch/elsa/elsa_limit.txt \
+	touch/elsa/elsa_limit_mfts.txt
+endif
+fw-shipped-$(CONFIG_LGE_USB_ANX7418) += anx7418/ocm_hamming_13.bin
 fw-shipped-$(CONFIG_LGE_USB_ANX7418) += anx7418/ocm_crc_08.bin
 fw-shipped-$(CONFIG_LGE_USB_ANX7688) += analogix/mi1_eeprom_20_8b.img
 
+fw-shipped-$(CONFIG_SAR_ATMF04) += atmf04/atmf04_2CH_V0.41.fw
+
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
+
+# Directories which we _might_ need to create, so we have a rule for them.
+firmware-dirs := $(sort $(addprefix $(objtree)/$(obj)/,$(dir $(fw-external-y) $(fw-shipped-all))))
+
+quiet_cmd_mkdir = MKDIR   $(patsubst $(objtree)/%,%,$@)
+      cmd_mkdir = mkdir -p $@
 
 quiet_cmd_ihex  = IHEX    $@
       cmd_ihex  = $(OBJCOPY) -Iihex -Obinary $< $@
@@ -205,7 +236,9 @@ ifneq ($(objtree),$(srctree))
 $(patsubst %,$(obj)/%, $(fw-shipped-y)): %: %.gen.S
 	$(call cmd,copy)
 endif
-$(patsubst %,$(obj)/%.gen.S, $(fw-shipped-y)): %: $(wordsize_deps)
+
+$(patsubst %,$(obj)/%.gen.S, $(fw-shipped-y)): %: $(wordsize_deps) \
+		| $(objtree)/$$(dir %)
 	$(call cmd,fwbin,$(patsubst %.gen.S,%,$@))
 $(patsubst %,$(obj)/%.gen.S, $(fw-external-y)): %: $(wordsize_deps) \
 		include/config/extra/firmware/dir.h
@@ -214,6 +247,10 @@ $(patsubst %,$(obj)/%.gen.S, $(fw-external-y)): %: $(wordsize_deps) \
 # The .o files depend on the binaries directly; the .S files don't.
 $(patsubst %,$(obj)/%.gen.o, $(fw-shipped-y)): %.gen.o: %
 $(patsubst %,$(obj)/%.gen.o, $(fw-external-y)): $(obj)/%.gen.o: $(fwdir)/%
+
+# Manufacturers don't like to distribute in ihex, I guess I can't blame them.
+$(obj)/%: $(obj)/%.cp
+	$(call cmd,copy)
 
 # .ihex is used just as a simple way to hold binary files in a source tree
 # where binaries are frowned upon. They are directly converted with objcopy.
