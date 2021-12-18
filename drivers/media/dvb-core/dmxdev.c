@@ -36,7 +36,13 @@
 #include <linux/compat.h>
 #include "dmxdev.h"
 
+/* module parameters for overflow method configuration */
+#ifdef CONFIG_LGE_BROADCAST_ISDBT_JAPAN
+static int overflow_auto_flush = 0;
+#else /* CONFIG_LGE_BROADCAST_ISDBT_JAPAN */
 static int overflow_auto_flush = 1;
+#endif /* CONFIG_LGE_BROADCAST_ISDBT_JAPAN */
+
 module_param(overflow_auto_flush, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(overflow_auto_flush,
 	"Automatically flush buffer on overflow (default: on)");
@@ -4433,7 +4439,9 @@ static int dvb_demux_do_ioctl(struct file *file,
 		break;
 
 	default:
-		ret = -ENOTTY;
+		pr_err("%s: unknown ioctl code (0x%x)\n",
+			__func__, cmd);
+		ret = -ENOIOCTLCMD;
 		break;
 	}
 	mutex_unlock(&dmxdev->mutex);

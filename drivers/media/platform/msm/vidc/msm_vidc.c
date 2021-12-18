@@ -392,13 +392,6 @@ static inline bool is_dynamic_output_buffer_mode(struct v4l2_buffer *b,
 }
 
 
-static inline bool is_encoder_input_buffer(struct v4l2_buffer *b,
-				struct msm_vidc_inst *inst)
-{
-	return b->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
-			inst->session_type == MSM_VIDC_ENCODER;
-}
-
 static inline void save_v4l2_buffer(struct v4l2_buffer *b,
 						struct buffer_info *binfo)
 {
@@ -1167,7 +1160,7 @@ void *msm_vidc_open(int core_id, int session_type)
 		goto err_invalid_core;
 	}
 
-	pr_info(VIDC_DBG_TAG "Opening video instance: %pK, %d\n",
+	pr_debug(VIDC_DBG_TAG "Opening video instance: %pK, %d\n",
 		VIDC_MSG_PRIO2STRING(VIDC_INFO), inst, session_type);
 	mutex_init(&inst->sync_lock);
 	mutex_init(&inst->bufq[CAPTURE_PORT].lock);
@@ -1343,7 +1336,7 @@ int msm_vidc_destroy(struct msm_vidc_inst *inst)
 	mutex_destroy(&inst->lock);
 
 	msm_vidc_debugfs_deinit_inst(inst);
-	pr_info(VIDC_DBG_TAG "Closed video instance: %pK\n",
+	pr_debug(VIDC_DBG_TAG "Closed video instance: %pK\n",
 			VIDC_MSG_PRIO2STRING(VIDC_INFO), inst);
 	kfree(inst);
 	return 0;
