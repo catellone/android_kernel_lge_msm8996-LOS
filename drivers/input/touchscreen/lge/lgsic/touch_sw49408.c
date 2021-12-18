@@ -41,7 +41,7 @@ static const char *debug_type[] = {
 	"Always Report Type"
 };
 #define TCI_FAIL_NUM 17
-static const char const *tci_debug_str[TCI_FAIL_NUM] = {
+static const char *tci_debug_str[TCI_FAIL_NUM] = {
 	"NONE",
 	"DISTANCE_INTER_TAP",
 	"DISTANCE_TOUCHSLOP",
@@ -61,7 +61,7 @@ static const char const *tci_debug_str[TCI_FAIL_NUM] = {
 	"DEBUG16"
 };
 #define SWIPE_FAIL_NUM 17
-static const char const *swipe_debug_str[SWIPE_FAIL_NUM] = {
+static const char *swipe_debug_str[SWIPE_FAIL_NUM] = {
 	"ERROR",
 	"1FINGER_FAST_RELEASE",
 	"MULTI_FINGER",
@@ -420,7 +420,7 @@ static void sw49408_get_swipe_info(struct device *dev)
 	d->swipe.info[SWIPE_U].start_area.y2 = 2780;
 	d->swipe.info[SWIPE_U].wrong_direction_thres = 5;
 	d->swipe.info[SWIPE_U].initial_ratio_dist = 4;
-	d->swipe.info[SWIPE_U].initial_ratio_thres = 41;
+	d->swipe.info[SWIPE_U].initial_ratio_thres = 100; // changed from 41 to 100
 
 	d->swipe.mode = 0;
 		/*SWIPE_RIGHT_BIT | SWIPE_DOWN_BIT |
@@ -2270,9 +2270,12 @@ static int sw49408_upgrade(struct device *dev)
 			&ts->test_fwpath[0]);
 	} else if (ts->def_fwcnt) {
 		if (!strcmp(d->ic_info.product_id, "L1L57P2")) {
-			memcpy(fwpath, ts->def_fwpath[0], sizeof(fwpath));
-			TOUCH_I("get fwpath from def_fwpath : rev:%d\n",
-			d->ic_info.revision);
+			if (d->ic_info.chip_revision & 0x01)
+				memcpy(fwpath, ts->def_fwpath[0], sizeof(fwpath));
+			else
+				memcpy(fwpath, ts->def_fwpath[1], sizeof(fwpath));
+			TOUCH_I("get fwpath from def_fwpath : rev:%x\n",
+			d->ic_info.chip_revision);
 		} else {
 			memcpy(fwpath, ts->def_fwpath[0], sizeof(fwpath));
 			TOUCH_I("wrong product id[%s] : fw_path set for default\n",
@@ -2473,8 +2476,8 @@ static int sw49408_init(struct device *dev)
 	return 0;
 }
 
-/* (1 << 5)|(1 << 6)|(1 << 7)|(1 << 9)|(1 << 10)|(1 << 31) */
-#define INT_RESET_CLR_BIT	0x800006E0
+/* (1 << 5)|(1 << 6)|(1 << 7)|(1 << 9)|(1 << 10)|(1 << 21)|(1 << 31) */
+#define INT_RESET_CLR_BIT	0x802006E0
 /* (1 << 13)|(1 << 15)|(1 << 20)|(1 << 22) */
 #define INT_LOGGING_CLR_BIT	0x50A000
 /* (1 << 5) |(1 << 6) |(1 << 7)|(0 << 9)|(0 << 10)|(0 << 13)|(1 << 15)|(1 << 20)|(1 << 22) */
@@ -2590,6 +2593,12 @@ int sw49408_check_status(struct device *dev)
 				checking_log_size - length,
 				"[20]Touch interrupt status Invalid");
 		}
+		if ((status & (1 << 21))) {
+			checking_log_flag = 1;
+			length += snprintf(checking_log + length,
+				checking_log_size - length,
+				"[21]Memory Crashed Detected");
+		}
 		if (!(status & (1 << 22))) {
 			checking_log_flag = 1;
 			length += snprintf(checking_log + length,
@@ -2638,15 +2647,27 @@ int sw49408_check_status(struct device *dev)
 		// debugging_mask 0x3 : error report
 		// debugging_mask 0x4 : debugging report
 	} else if (debugging_mask == 0x3 || debugging_mask == 0x4) {
-		debugging_length = ((d->info.debug.ic_debug_info >> 24) & 0xFF);
-		debugging_type = (d->info.debug.ic_debug_info & 0x00FFFFFF);
+		if (status & (1 << 15)) {
+			debugging_length = ((d->info.debug.ic_debug_info >> 24) & 0xFF);
+			debugging_type = (d->info.debug.ic_debug_info & 0x00FFFFFF);
 
-		TOUCH_E(
-				"%s, INT_TYPE:%x,Length:%d,Type:%x,Log:%x %x %x\n",
-				__func__, debugging_mask,
-				debugging_length, debugging_type,
-				d->info.debug.ic_debug[0], d->info.debug.ic_debug[1],
-				d->info.debug.ic_debug[2]);
+			TOUCH_E(
+					"%s, INT_TYPE:%x,Length:%d,Type:%x,Log:%x %x %x\n",
+					__func__, debugging_mask,
+					debugging_length, debugging_type,
+					d->info.debug.ic_debug[0], d->info.debug.ic_debug[1],
+					d->info.debug.ic_debug[2]);
+		}
+	}
+
+	if (debugging_type >= 0x8000 && debugging_type <= 0x8FFF)
+		d->abnormal_recovery++;
+	else
+		d->abnormal_recovery = 0;
+
+	if (d->abnormal_recovery > NEED_RESET && (ret != -EUPGRADE)) {
+		TOUCH_I("%s : Reset! abnormal_recovery = %d\n", __func__, d->abnormal_recovery);
+		ret = -ERESTART;
 	}
 
 	return ret;
@@ -2692,7 +2713,7 @@ int sw49408_irq_abs_data(struct device *dev)
 	}
 
 	/* check if palm detected */
-	if (data[0].track_id >= WATER_ID) {
+	if (data[0].track_id == PALM_ID || data[0].track_id == WATER_ID) {
 		if (data[0].event == TOUCHSTS_DOWN) {
 			ts->is_cancel = 1;
 			TOUCH_I("%s Detected\n", data[0].track_id == WATER_ID ?
@@ -2758,8 +2779,8 @@ int sw49408_irq_abs(struct device *dev)
 
 	/* check if touch cnt is valid */
 	if (d->info.touch_cnt == 0 || d->info.touch_cnt > ts->caps.max_id) {
-		TOUCH_I("%s : touch cnt is invalid - %d\n",
-			__func__, d->info.touch_cnt);
+		TOUCH_I("%s : touch cnt is invalid - %d, abnormal_recovery = %d\n",
+			__func__, d->info.touch_cnt, d->abnormal_recovery);
 		return -ERANGE;
 	}
 
