@@ -1599,7 +1599,7 @@ afunc_bind(struct usb_configuration *cfg, struct usb_function *fn)
 
 	prm = &agdev->uac2.c_prm;
 	prm->max_psize = hs_epout_desc.wMaxPacketSize;
-	prm->rbuf = kzalloc(prm->max_psize * USB_XFERS, GFP_KERNEL);
+	prm->rbuf = kcalloc(prm->max_psize, USB_XFERS, GFP_KERNEL);
 	if (!prm->rbuf) {
 		prm->max_psize = 0;
 		goto err_free_descs;
@@ -1607,7 +1607,7 @@ afunc_bind(struct usb_configuration *cfg, struct usb_function *fn)
 
 	prm = &agdev->uac2.p_prm;
 	prm->max_psize = hs_epin_desc.wMaxPacketSize;
-	prm->rbuf = kzalloc(prm->max_psize * USB_XFERS, GFP_KERNEL);
+	prm->rbuf = kcalloc(prm->max_psize, USB_XFERS, GFP_KERNEL);
 	if (!prm->rbuf) {
 		prm->max_psize = 0;
 		goto err_free_descs;
@@ -1794,7 +1794,7 @@ afunc_set_alt(struct usb_function *fn, unsigned intf, unsigned alt)
 			factor = 1000;
 		} else {
 			ep_desc = &hs_epin_desc;
-			factor = 125;
+			factor = 8000;
 		}
 
 		if (alt != 0) {
@@ -1827,7 +1827,7 @@ afunc_set_alt(struct usb_function *fn, unsigned intf, unsigned alt)
 		uac2->p_framesize = opts->p_ssize *
 				    num_channels(opts->p_chmask);
 		rate = opts->p_srate * uac2->p_framesize;
-		uac2->p_interval = (1 << (ep_desc->bInterval - 1)) * factor;
+		uac2->p_interval = factor / (1 << (ep_desc->bInterval - 1));
 		uac2->p_pktsize = min_t(unsigned int, rate / uac2->p_interval,
 					prm->max_psize);
 

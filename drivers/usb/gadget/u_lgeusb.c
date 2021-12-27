@@ -36,10 +36,6 @@
 
 static struct mutex lgeusb_lock;
 
-#ifdef CONFIG_LGE_USB_G_AUTORUN
-static u16 user_mode;
-#endif
-
 /* This length must be same as MAX_STR_LEN in android.c */
 #define MAX_SERIAL_NO_LEN 256
 
@@ -220,44 +216,6 @@ static ssize_t lgeusb_mode_show(struct device *dev,
 }
 static DEVICE_ATTR(lge_usb_mode, S_IRUGO, lgeusb_mode_show, NULL);
 
-#ifdef CONFIG_LGE_USB_G_AUTORUN
-/* To set/get USB user mode to/from user space for autorun */
-static ssize_t autorun_user_mode_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	ssize_t ret;
-
-	ret = snprintf(buf, PAGE_SIZE, "%d", user_mode);
-	return ret;
-}
-
-static ssize_t autorun_user_mode_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	ssize_t ret = 0;
-	unsigned long tmp;
-
-	ret = kstrtoul(buf, 10, &tmp);
-	if (ret)
-		return ret;
-
-	mutex_lock(&lgeusb_lock);
-	user_mode = (unsigned int)tmp;
-	mutex_unlock(&lgeusb_lock);
-
-	pr_info("autorun user mode : %d\n", user_mode);
-
-	return ret;
-}
-static DEVICE_ATTR(autorun_user_mode, S_IRUGO | S_IWUSR, autorun_user_mode_show,
-		autorun_user_mode_store);
-
-int lgeusb_get_autorun_user_mode(void)
-{
-	return user_mode;
-}
-#endif
-
 static struct device_attribute *lge_android_usb_attributes[] = {
 	&dev_attr_vendor_id,
 	&dev_attr_factory_pid,
@@ -270,9 +228,6 @@ static struct device_attribute *lge_android_usb_attributes[] = {
 	&dev_attr_sw_version,
 	&dev_attr_sub_version,
 	&dev_attr_phone_id,
-#ifdef CONFIG_LGE_USB_G_AUTORUN
-	&dev_attr_autorun_user_mode,
-#endif
 	NULL
 };
 

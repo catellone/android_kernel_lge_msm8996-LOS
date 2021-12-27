@@ -40,7 +40,7 @@
 #include <linux/configfs.h>
 #include <linux/usb/composite.h>
 
-#include "../drivers/usb/gadget/configfs.h"
+#include "configfs.h"
 
 #define MTP_RX_BUFFER_INIT_SIZE    1048576
 #define MTP_BULK_BUFFER_SIZE       16384
@@ -2040,7 +2040,7 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct mtp_dev	*dev = func_to_mtp(f);
 	struct usb_request *req;
 	int i;
-
+	
 #ifdef CONFIG_LGE_USB_G_MULTIPLE_CONFIGURATION
 	if (!dev->allocated_func) {
 		dev->state = STATE_OFFLINE;

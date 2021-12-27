@@ -505,17 +505,16 @@ static int prealloc(struct list_head *list,
 			req->complete = tx_complete;
 			if (!sg_supported)
 				goto add_list;
-			req->sg = kmalloc(
-					DL_MAX_PKTS_PER_XFER *
+			req->sg = kmalloc_array(DL_MAX_PKTS_PER_XFER,
 						sizeof(struct scatterlist),
-					GFP_ATOMIC);
+						GFP_ATOMIC);
 			if (!req->sg)
 				goto extra;
 			sg_ctx = kmalloc(sizeof(*sg_ctx), GFP_ATOMIC);
 			if (!sg_ctx)
 				goto extra;
 			req->context = sg_ctx;
-			req->buf = kzalloc(DL_MAX_PKTS_PER_XFER * hlen,
+			req->buf = kcalloc(hlen, DL_MAX_PKTS_PER_XFER,
 						GFP_ATOMIC);
 		} else {
 			req->complete = rx_complete;
@@ -1301,23 +1300,6 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	}
 
 	req->length = length;
-
-	/* throttle high/super speed IRQ rate back slightly */
-	if (gadget_is_dualspeed(dev->gadget) &&
-			 (dev->gadget->speed == USB_SPEED_HIGH ||
-			  dev->gadget->speed == USB_SPEED_SUPER)) {
-		spin_lock_irqsave(&dev->req_lock, flags);
-		dev->tx_qlen++;
-		if (dev->tx_qlen == MAX_TX_REQ_WITH_NO_INT) {
-			req->no_interrupt = 0;
-			dev->tx_qlen = 0;
-		} else {
-			req->no_interrupt = 1;
-		}
-		spin_unlock_irqrestore(&dev->req_lock, flags);
-	} else {
-		req->no_interrupt = 0;
-	}
 
 	if (skb_timestamp_enable) {
 		skb->tstamp = ktime_get();

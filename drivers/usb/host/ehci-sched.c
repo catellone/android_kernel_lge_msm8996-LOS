@@ -130,8 +130,9 @@ static struct ehci_tt *find_tt(struct usb_device *udev)
 	if (utt->multi) {
 		tt_index = utt->hcpriv;
 		if (!tt_index) {		/* Create the index array */
-			tt_index = kzalloc(utt->hub->maxchild *
-					sizeof(*tt_index), GFP_ATOMIC);
+			tt_index = kcalloc(utt->hub->maxchild,
+					   sizeof(*tt_index),
+					   GFP_ATOMIC);
 			if (!tt_index)
 				return ERR_PTR(-ENOMEM);
 			utt->hcpriv = tt_index;
@@ -1604,11 +1605,11 @@ iso_stream_schedule (
 	 */
 	now2 = (now - base) & (mod - 1);
 
-	/* Is the schedule already full? */
+	/* Is the schedule about to wrap around? */
 	if (unlikely(!empty && start < period)) {
-		ehci_dbg(ehci, "iso sched full %pK (%u-%u < %u mod %u)\n",
+		ehci_dbg(ehci, "request %pK would overflow (%u-%u < %u mod %u)\n",
 				urb, stream->next_uframe, base, period, mod);
-		status = -ENOSPC;
+		status = -EFBIG;
 		goto fail;
 	}
 

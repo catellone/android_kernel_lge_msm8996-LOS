@@ -92,7 +92,7 @@
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
 #define QPNP_HAP_VMAX_MAX_MV		2088
 #else /* QCT original */
-#define QPNP_HAP_VMAX_MAX_MV		3248
+#define QPNP_HAP_VMAX_MAX_MV		3596
 #endif
 
 #define QPNP_HAP_ILIM_MASK		0xFE
@@ -376,7 +376,9 @@ struct qpnp_hap {
 	u32 vtg_default;
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
 	u32 vmax_mv_orig;
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
 	bool bSkipOv;
+#endif
 #endif
 	u32 ilim_ma;
 	u32 sc_deb_cycles;
@@ -443,7 +445,6 @@ static u8 rb_pattern[] = {
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
 /* LGE add qpnp_hap_vmax_config function for Overdrive and reverse braking in Direct MODE */
 static int qpnp_hap_vmax_config(struct qpnp_hap *hap, int odrb);
-bool elt_state;
 #endif
 #ifdef CONFIG_TSPDRV
 static int qpnp_hap_vmax_config(struct qpnp_hap *hap);
@@ -604,12 +605,16 @@ static int qpnp_hap_play(struct qpnp_hap *hap, int on)
 			hap->vmax_mv = hap->vmax_mv_orig * 2;
 #endif
 			/* LGE set Reverse braking tunning voltage */
-			if(elt_state)
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
+			if(hap->bSkipOv)
 				hap->vmax_mv = QPNP_HAP_VMAX_MAX_MV;
 			else
 				hap->vmax_mv = QPNP_HAP_OV_RB_MV;
-			qpnp_hap_vmax_config(hap,1);
 			hap->bSkipOv = 0;
+#else
+			hap->vmax_mv = QPNP_HAP_OV_RB_MV;
+#endif
+			qpnp_hap_vmax_config(hap,1);
 		}
 	}
 #endif
@@ -627,6 +632,7 @@ static int qpnp_hap_play(struct qpnp_hap *hap, int on)
 			QPNP_HAP_PLAY_REG(hap->base));
 	if (rc < 0)
 		return rc;
+
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
 	dev_info(&hap->spmi->dev, "qpnp_hap_play: on = %d, voltage = %d \n", on, hap->vmax_mv);
 #else
@@ -1454,27 +1460,6 @@ static ssize_t qpnp_hap_amp_store(struct device *dev,
 
 	return count;
 }
-static ssize_t qpnp_hap_elt_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	return snprintf(buf, PAGE_SIZE, "%d\n", elt_state);
-}
-
-/* sysfs store for elt */
-static ssize_t qpnp_hap_elt_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	int value;
-	if (sscanf(buf, "%d", &value) != 1)
-		return 0;
-
-	if (value == 1){
-		elt_state = 1;
-	} else {
-		elt_state = 0;
-	}
-	return count;
-}
 #endif
 
 #ifdef CONFIG_TSPDRV
@@ -1496,7 +1481,7 @@ static ssize_t qpnp_hap_amp_store(struct device *dev,
 	struct timed_output_dev *timed_dev = dev_get_drvdata(dev);
 	struct qpnp_hap *hap = container_of(timed_dev, struct qpnp_hap,
 					 timed_dev);
-	int value, amp_index, rc;
+	int value, amp_index, rc = 0;
 	u8 rb_reg;
 
 	if (sscanf(buf, "%d", &value) != 1)
@@ -1769,9 +1754,11 @@ static struct device_attribute qpnp_hap_attrs[] = {
 	__ATTR(amp, (S_IRUGO | S_IWUSR | S_IWGRP),
 			qpnp_hap_amp_show,
 			qpnp_hap_amp_store),
-	__ATTR(elt, (S_IRUGO | S_IWUSR | S_IWGRP),
-			qpnp_hap_elt_show,
-			qpnp_hap_elt_store),
+#endif
+#if defined (CONFIG_TSPDRV)
+        __ATTR(elt, (S_IRUGO | S_IWUSR | S_IWGRP),
+                        qpnp_hap_elt_show,
+                        qpnp_hap_elt_store),
 #endif
 	__ATTR(ramp_test, (S_IRUGO | S_IWUSR | S_IWGRP),
 			qpnp_hap_ramp_test_data_show,
@@ -2078,19 +2065,18 @@ static void qpnp_timed_enable_worker(struct work_struct *work)
 			mutex_unlock(&hap->lock);
 			return;
 		}
-#ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
-		hap->bSkipOv = 0;
-#endif
 		hap->state = 0;
 	} else {
 		value = (value > hap->timeout_ms ?
 				 hap->timeout_ms : value);
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
-		if (value > 810 && elt_state){
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
+		if (value > 810){
 			hap->bSkipOv = 1;
 		} else {
 			hap->bSkipOv = 0;
 		}
+#endif
 #endif
 		hap->state = 1;
 	}
@@ -2195,7 +2181,9 @@ static void qpnp_hap_worker(struct work_struct *work)
 				return;
 
 			if ((reg & QPNP_HAP_STATUS_BUSY) == 0) {
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
 				if (!hap->bSkipOv) {
+#endif
 				/* LGE add Over Drive time rate*/
 				unsigned long sleep_time;
 				/* LGE don't use 2 x VMAX */
@@ -2213,7 +2201,9 @@ static void qpnp_hap_worker(struct work_struct *work)
 				sleep_time = hap->wave_play_rate_us * 4;
 				dev_dbg(&hap->spmi->dev, "qpnp_hap_worker: Sleep %lu us \n", sleep_time);
 				usleep_range(sleep_time, sleep_time);
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
 				}
+#endif
 				/* recover original vmax */
 				hap->vmax_mv = hap->vmax_mv_orig;
 				qpnp_hap_vmax_config(hap ,0 );
@@ -2852,8 +2842,9 @@ static int qpnp_hap_parse_dt(struct qpnp_hap *hap)
 		hap->vmax_mv = temp;
 #ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
 		hap->vmax_mv_orig = hap->vmax_mv;
+#ifdef CONFIG_LGE_QPNP_REMOVE_OV_RB
 		hap->bSkipOv = 0;
-		elt_state =0;
+#endif
 #endif
 	} else if (rc != -EINVAL) {
 		dev_err(&spmi->dev, "Unable to read vmax\n");
@@ -2880,10 +2871,11 @@ static int qpnp_hap_parse_dt(struct qpnp_hap *hap)
 		return rc;
 	}
 
-	if (hap->vmax_mv < hap->vtg_min)
+	if (hap->vmax_mv < hap->vtg_min) {
 		hap->vmax_mv = hap->vtg_min;
-	else if (hap->vmax_mv > hap->vtg_max)
+	} else if (hap->vmax_mv > hap->vtg_max) {
 		hap->vmax_mv = hap->vtg_max;
+	}
 
 	hap->vtg_default = hap->vmax_mv;
 
@@ -2987,6 +2979,31 @@ static int qpnp_hap_parse_dt(struct qpnp_hap *hap)
 	return 0;
 }
 
+/* set vmax from other kernel module through opaque device struct */
+int qpnp_haptic_timed_vmax(struct timed_output_dev *timed, int value, int duration)
+{
+//    struct qpnp_hap *hap = dev_get_drvdata(timed->dev);
+	struct qpnp_hap *hap = container_of(timed, struct qpnp_hap,
+					 timed_dev);
+    int prev_vmax_mv = hap->vmax_mv;
+    hap->vmax_mv = value + QPNP_HAP_VMAX_MIN_MV;
+
+//	dev_info(&hap->spmi->dev, "%s : value : %d, duration : %d\n", __func__, value, duration);
+
+#ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
+	qpnp_hap_vmax_config(hap,0);
+#else
+	qpnp_hap_vmax_config(hap);
+#endif
+
+    if (duration > 0) {
+        qpnp_hap_td_enable(timed, value > 0 ? duration : 0);
+    }
+
+    return prev_vmax_mv;
+}
+EXPORT_SYMBOL_GPL(qpnp_haptic_timed_vmax);
+
 static int qpnp_hap_get_pmic_revid(struct qpnp_hap *hap)
 {
 	struct pmic_revid_data *pmic_rev_id;
@@ -3014,31 +3031,6 @@ static int qpnp_hap_get_pmic_revid(struct qpnp_hap *hap)
 
 	return 0;
 }
-
-/* set vmax from other kernel module through opaque device struct */
-int qpnp_haptic_timed_vmax(struct timed_output_dev *timed, int value, int duration)
-{
-//    struct qpnp_hap *hap = dev_get_drvdata(timed->dev);
-	struct qpnp_hap *hap = container_of(timed, struct qpnp_hap,
-					 timed_dev);
-    int prev_vmax_mv = hap->vmax_mv;
-    hap->vmax_mv = value + QPNP_HAP_VMAX_MIN_MV;
-
-//	dev_info(&hap->spmi->dev, "%s : value : %d, duration : %d\n", __func__, value, duration);
-
-#ifdef CONFIG_LGE_QPNP_HAPTIC_OV_RB
-	qpnp_hap_vmax_config(hap,0);
-#else
-	qpnp_hap_vmax_config(hap);
-#endif
-
-    if (duration > 0) {
-        qpnp_hap_td_enable(timed, value > 0 ? duration : 0);
-    }
-
-    return prev_vmax_mv;
-}
-EXPORT_SYMBOL_GPL(qpnp_haptic_timed_vmax);
 
 static int qpnp_haptic_probe(struct spmi_device *spmi)
 {

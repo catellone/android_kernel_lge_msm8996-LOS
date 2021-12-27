@@ -19,7 +19,7 @@
 #include <linux/timer.h>
 #include "f_gsi.h"
 #include "rndis.h"
-#include "../drivers/usb/gadget/debug.h"
+#include "debug.h"
 
 static unsigned int gsi_in_aggr_size;
 module_param(gsi_in_aggr_size, uint, S_IRUGO | S_IWUSR);
@@ -632,12 +632,12 @@ int ipa_usb_notify_cb(enum ipa_usb_notify_event event,
 				return -ENOMEM;
 			}
 			cpkt_notify_speed->type = GSI_CTRL_NOTIFY_SPEED;
-			spin_lock(&gsi->c_port.lock);
+			spin_lock_irqsave(&gsi->c_port.lock, flags);
 			list_add_tail(&cpkt_notify_connect->list,
 					&gsi->c_port.cpkt_resp_q);
 			list_add_tail(&cpkt_notify_speed->list,
 					&gsi->c_port.cpkt_resp_q);
-			spin_unlock(&gsi->c_port.lock);
+			spin_unlock_irqrestore(&gsi->c_port.lock, flags);
 			gsi_ctrl_send_notification(gsi);
 		}
 
@@ -3245,7 +3245,6 @@ int gsi_bind_config(struct usb_configuration *c, enum ipa_usb_teth_prot prot_id)
 	case IPA_USB_MBIM:
 		gsi->function.name = "mbim";
 		gsi->function.strings = mbim_gsi_strings;
-		gsi->d_port.ntb_info.ntb_input_size = MBIM_NTB_DEFAULT_IN_SIZE;
 		break;
 	case IPA_USB_DIAG:
 		gsi->function.name = "dpl";

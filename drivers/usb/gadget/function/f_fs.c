@@ -799,9 +799,9 @@ retry:
 		spin_unlock_irq(&epfile->ffs->eps_lock);
 #else
 		if (gadget) {
-		extra_buf_alloc = gadget->extra_buf_alloc;
+			extra_buf_alloc = gadget->extra_buf_alloc;
 		} else {
-		spin_unlock_irq(&epfile->ffs->eps_lock);
+			spin_unlock_irq(&epfile->ffs->eps_lock);
 			ret = -ENODEV;
 			goto error;
 		}
@@ -1843,19 +1843,19 @@ static int ffs_func_eps_enable(struct ffs_function *func)
 		ep->ep->driver_data = ep;
 		ep->ep->desc = ds;
 
+		if (needs_comp_desc) {
+			comp_desc = (struct usb_ss_ep_comp_descriptor *)(ds +
+					USB_DT_ENDPOINT_SIZE);
+			ep->ep->maxburst = comp_desc->bMaxBurst + 1;
+			ep->ep->comp_desc = comp_desc;
+		}
+
 		ret = config_ep_by_speed(func->gadget, &func->function, ep->ep);
 		if (ret) {
 			pr_err("%s(): config_ep_by_speed(%d) err for %s\n",
 						__func__, ret, ep->ep->name);
 			break;
 		}
-
-		comp_desc = (struct usb_ss_ep_comp_descriptor *)(ds +
-				USB_DT_ENDPOINT_SIZE);
-		ep->ep->maxburst = comp_desc->bMaxBurst + 1;
-
-		if (needs_comp_desc)
-			ep->ep->comp_desc = comp_desc;
 
 		ret = usb_ep_enable(ep->ep);
 		if (likely(!ret)) {
@@ -2909,8 +2909,8 @@ static int _ffs_func_bind(struct usb_configuration *c,
 	struct ffs_data *ffs = func->ffs;
 
 	const int full = !!func->ffs->fs_descs_count;
-	const int high = !!func->ffs->hs_descs_count;
-	const int super = !!func->ffs->ss_descs_count;
+	const int high = func->ffs->hs_descs_count;
+	const int super = func->ffs->ss_descs_count;
 
 	int fs_len, hs_len, ss_len, ret, i;
 
@@ -3180,7 +3180,7 @@ static int ffs_func_setup(struct usb_function *f,
 	__ffs_event_add(ffs, FUNCTIONFS_SETUP);
 	spin_unlock_irqrestore(&ffs->ev.waitq.lock, flags);
 
-	return USB_GADGET_DELAYED_STATUS;
+	return creq->wLength == 0 ? USB_GADGET_DELAYED_STATUS : 0;
 }
 
 static void ffs_func_suspend(struct usb_function *f)

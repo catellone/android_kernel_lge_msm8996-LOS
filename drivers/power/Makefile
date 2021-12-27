@@ -76,13 +76,13 @@ obj-$(CONFIG_QPNP_FG_GEN3)	+= qpnp-fg-gen3.o fg-memif.o fg-util.o pmic-voter.o
 ifndef CONFIG_MACH_MSM8996_H1
 obj-$(CONFIG_QPNP_SMBCHARGER)	+= qpnp-smbcharger.o pmic-voter.o
 else
-obj-$(CONFIG_QPNP_SMBCHARGER)   += qpnp-smbcharger_alice.o pmic-voter_alice.o
+obj-$(CONFIG_QPNP_SMBCHARGER)	+= qpnp-smbcharger_alice.o pmic-voter_alice.o
 endif
-obj-$(CONFIG_BATTERY_MAX17050)  += max17050_battery.o
+obj-$(CONFIG_BATTERY_MAX17050)	+= max17050_battery.o
 ifndef CONFIG_MACH_MSM8996_H1
 obj-$(CONFIG_QPNP_FG)		+= qpnp-fg.o
 else
-obj-$(CONFIG_QPNP_FG)           += qpnp-fg_alice.o
+obj-$(CONFIG_QPNP_FG)		+= qpnp-fg_alice.o
 endif
 obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger.o
 obj-$(CONFIG_QPNP_LINEAR_CHARGER)	+= qpnp-linear-charger.o
@@ -101,5 +101,5 @@ endif
 obj-$(CONFIG_LGE_PM_BATTERY_SWAP) += lge_battery_swap.o
 obj-$(CONFIG_LGE_APPS_PORT_FRIENDS) += lge_friends_manager.o
 obj-$(CONFIG_ARCH_MSM)		+= qcom/
-obj-$(CONFIG_LGE_PM_LGE_POWER_CLASS_VZW_REQ)		+= lge_vzw_req.o
+obj-$(CONFIG_LGE_PM_LGE_POWER_CLASS_VZW_REQ)	+= lge_vzw_req.o
 obj-$(CONFIG_LGE_PM_BATTERY_VENEER)	+= lge/

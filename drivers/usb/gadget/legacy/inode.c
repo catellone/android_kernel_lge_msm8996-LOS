@@ -442,6 +442,7 @@ ep_write (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 	kbuf = memdup_user(buf, len);
 	if (IS_ERR(kbuf)) {
 		value = PTR_ERR(kbuf);
+		kbuf = NULL;
 		goto free1;
 	}
 
@@ -655,6 +656,7 @@ fail:
 				   GFP_KERNEL);
 		if (!priv->iv) {
 			kfree(priv);
+			value = -ENOMEM;
 			goto fail;
 		}
 	}
@@ -1022,7 +1024,7 @@ ep0_read (struct file *fd, char __user *buf, size_t len, loff_t *ptr)
 			if ((retval = setup_req (ep, req, 0)) == 0) {
 				++dev->udc_usage;
 				spin_unlock_irq (&dev->lock);
-				retval = usb_ep_queue (ep, req, GFP_ATOMIC);
+				retval = usb_ep_queue (ep, req, GFP_KERNEL);
 				spin_lock_irq (&dev->lock);
 				--dev->udc_usage;
 			}
@@ -1577,7 +1579,7 @@ delegate:
 				++dev->udc_usage;
 				spin_unlock (&dev->lock);
 				value = usb_ep_queue (gadget->ep0, dev->req,
-							GFP_ATOMIC);
+							GFP_KERNEL);
 				spin_lock (&dev->lock);
 				--dev->udc_usage;
 				if (value < 0) {
@@ -1605,7 +1607,7 @@ delegate:
 
 		++dev->udc_usage;
 		spin_unlock (&dev->lock);
-		value = usb_ep_queue (gadget->ep0, req, GFP_ATOMIC);
+		value = usb_ep_queue (gadget->ep0, req, GFP_KERNEL);
 		spin_lock(&dev->lock);
 		--dev->udc_usage;
 		spin_unlock(&dev->lock);
@@ -1613,6 +1615,7 @@ delegate:
 			DBG (dev, "ep_queue --> %d\n", value);
 			req->status = 0;
 		}
+		return value;
 	}
 
 	/* device stalls when value < 0 */
@@ -2193,3 +2196,4 @@ static void __exit cleanup (void)
 	unregister_filesystem (&gadgetfs_type);
 }
 module_exit (cleanup);
+

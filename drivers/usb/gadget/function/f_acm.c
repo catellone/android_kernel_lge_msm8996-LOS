@@ -677,13 +677,15 @@ static int acm_notify_serial_state(struct f_acm *acm)
 {
 	struct usb_composite_dev *cdev = acm->port.func.config->cdev;
 	int			status;
+	__le16			serial_state;
 
 	spin_lock(&acm->lock);
 	if (acm->notify_req) {
 		dev_dbg(&cdev->gadget->dev, "acm ttyGS%d serial state %04x\n",
 			acm->port_num, acm->serial_state);
+		serial_state = cpu_to_le16(acm->serial_state);
 		status = acm_cdc_notify(acm, USB_CDC_NOTIFY_SERIAL_STATE,
-				0, &acm->serial_state, sizeof(acm->serial_state));
+				0, &serial_state, sizeof(acm->serial_state));
 	} else {
 		acm->pending = true;
 		status = 0;
@@ -824,13 +826,13 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 #ifdef CONFIG_LGE_USB_G_ANDROID
 	if(acm_control_interface_desc.iInterface == 0){
 #endif
-	us = usb_gstrings_attach(cdev, acm_strings,
-			ARRAY_SIZE(acm_string_defs));
-	if (IS_ERR(us))
-		return PTR_ERR(us);
-	acm_control_interface_desc.iInterface = us[ACM_CTRL_IDX].id;
-	acm_data_interface_desc.iInterface = us[ACM_DATA_IDX].id;
-	acm_iad_descriptor.iFunction = us[ACM_IAD_IDX].id;
+		us = usb_gstrings_attach(cdev, acm_strings,
+				ARRAY_SIZE(acm_string_defs));
+		if (IS_ERR(us))
+			return PTR_ERR(us);
+		acm_control_interface_desc.iInterface = us[ACM_CTRL_IDX].id;
+		acm_data_interface_desc.iInterface = us[ACM_DATA_IDX].id;
+		acm_iad_descriptor.iFunction = us[ACM_IAD_IDX].id;
 #ifdef CONFIG_LGE_USB_G_ANDROID
 	}
 #endif
